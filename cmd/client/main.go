@@ -35,7 +35,7 @@ func main() {
 	_, _, err = pubsub.DeclareAndBind(
 		connection,
 		routing.ExchangePerilDirect,
-		fmt.Sprintf("%s.%s",routing.PauseKey, username),
+		fmt.Sprintf("%s.%s", routing.PauseKey, username),
 		routing.PauseKey,
 		pubsub.Transient,
 	)
@@ -43,9 +43,20 @@ func main() {
 		log.Panicln("Error during queue declaration/binding:", err)
 	}
 
+	log.Println("Succssesfully declared and binded a queue")
+
 	gameState := gamelogic.NewGameState(username)
 
-	infiniteLoop:
+	err = pubsub.SubscribeJSON(
+		connection,
+		routing.ExchangePerilDirect,
+		fmt.Sprintf("%s.%s", routing.PauseKey, username),
+		routing.PauseKey,
+		pubsub.Transient,
+		handlerPause(gameState),
+	)
+
+infiniteLoop:
 	for {
 		// get user input
 		input := gamelogic.GetInput()
@@ -55,7 +66,7 @@ func main() {
 			continue
 		}
 
-		switch input[0]{
+		switch input[0] {
 		case "spawn":
 			/*
 				The spawn command allows a player to add a new unit to the map under
@@ -133,11 +144,17 @@ func main() {
 		}
 	}
 
-
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
 
 	log.Println("")
 	log.Println("Shutting the client down...")
+}
+
+func handlerPause(gamestate *gamelogic.GameState) func(routing.PlayingState) {
+	return func(state routing.PlayingState) {
+		defer fmt.Print("> ")
+		gamestate.HandlePause(state)
+	}
 }
