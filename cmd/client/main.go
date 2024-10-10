@@ -55,6 +55,9 @@ func main() {
 		pubsub.Transient,
 		handlerPause(gameState),
 	)
+	if err != nil {
+		log.Panicln("Error during server subscription:", err)
+	}
 
 infiniteLoop:
 	for {
@@ -109,6 +112,7 @@ infiniteLoop:
 			if err != nil {
 				log.Println(err)
 			}
+
 
 		case "status":
 			/*
