@@ -1,49 +1,9 @@
 package pubsub
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-)
-
-func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
-	log.Println("Starting JSON publication...")
-
-	body, err := json.Marshal(val)
-	if err != nil {
-		return err
-	}
-
-	log.Println("JSON marshal went good")
-
-	err = ch.PublishWithContext(
-		context.Background(),
-		exchange,
-		key,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body: body,
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	log.Println("JSON published successfully")
-
-	return nil
-}
-
-type SimpleQueueType int
-
-const (
-	Durable SimpleQueueType = iota
-	Transient
 )
 
 func DeclareAndBind(
