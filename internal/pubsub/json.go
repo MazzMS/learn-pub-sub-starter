@@ -46,7 +46,7 @@ func SubscribeJSON[T any](
 	simpleQueueType SimpleQueueType,
 	handler func(T),
 ) error {
-	channel, queue, err := DeclareAndBind(
+	channel, _, err := DeclareAndBind(
 		conn,
 		exchange,
 		queueName,
