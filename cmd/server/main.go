@@ -2,8 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -18,7 +16,7 @@ func main() {
 
 	connection, err := amqp.Dial(connectionUrl)
 	if err != nil {
-		log.Panicln("Error during connection:", err)
+		log.Fatalln("Error during connection:", err)
 	}
 	defer connection.Close()
 	defer log.Println("Closing connection")
@@ -27,7 +25,7 @@ func main() {
 
 	channel, err := connection.Channel()
 	if err != nil {
-		log.Panicln("Error during channel creation:", err)
+		log.Fatalln("Error during channel creation:", err)
 	}
 
 	// channel, queue, err := pubsub.DeclareAndBind(
@@ -39,7 +37,7 @@ func main() {
 		pubsub.Durable,
 	)
 	if err != nil {
-		log.Panicln("Error during queue declaration/binding:", err)
+		log.Fatalln("Error during queue declaration/binding:", err)
 	}
 
 	err = pubsub.PublishJSON(
@@ -51,13 +49,12 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Panicln("Error during channel creation:", err)
+		log.Fatalln("Error during channel creation:", err)
 	}
 
 	// Print what users can do
 	gamelogic.PrintServerHelp()
 
-	infiniteLoop:
 	for {
 		// get input
 		possibleInputs := gamelogic.GetInput()
@@ -79,7 +76,7 @@ func main() {
 				},
 			)
 			if err != nil {
-				log.Panicln("Error while sending pause message:", err)
+				log.Fatalln("Error while sending pause message:", err)
 			}
 			log.Println("Pause message sent")
 
@@ -94,23 +91,16 @@ func main() {
 				},
 			)
 			if err != nil {
-				log.Panicln("Error while sending resume message:", err)
+				log.Fatalln("Error while sending resume message:", err)
 			}
 			log.Println("Resume message sent")
 
 		case "quit":
 			log.Println("Quitting")
-			break infiniteLoop
+		return
 
 		default:
 			log.Printf("Command undefined: %s\n", possibleInputs[0])
 		}
 	}
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-
-	log.Println("")
-	log.Println("Shutting the server down...")
 }

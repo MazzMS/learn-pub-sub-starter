@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
+	"strconv"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -14,52 +13,61 @@ import (
 
 func main() {
 	fmt.Println("Starting Peril client...")
-
 	connectionUrl := "amqp://guest:guest@localhost:5672/"
 
 	connection, err := amqp.Dial(connectionUrl)
 	if err != nil {
-		log.Panicln("Error during connection:", err)
+		log.Fatalln("Error during connection:", err)
 	}
 	defer connection.Close()
-	defer log.Println("Closing connection")
+	defer log.Println("Closing connection...")
 
 	log.Println("Connection established!")
 
+	// publish channel creation
+	publishCh, err := connection.Channel()
+	if err != nil {
+		log.Fatalln("Error during channel creation:", err)
+	}
+
+	// get username
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
-		log.Panicln("Error during connection:", err)
+		log.Fatalln("Error during connection:", err)
 	}
 
-	// channel, queue, err := pubsub.DeclareAndBind(
-	_, _, err = pubsub.DeclareAndBind(
-		connection,
-		routing.ExchangePerilDirect,
-		fmt.Sprintf("%s.%s", routing.PauseKey, username),
-		routing.PauseKey,
-		pubsub.Transient,
-	)
-	if err != nil {
-		log.Panicln("Error during queue declaration/binding:", err)
-	}
-
-	log.Println("Succssesfully declared and binded a queue")
-
+	// generate game state
 	gameState := gamelogic.NewGameState(username)
 
+	// subscribe to 'pause' queue
 	err = pubsub.SubscribeJSON(
 		connection,
 		routing.ExchangePerilDirect,
-		fmt.Sprintf("%s.%s", routing.PauseKey, username),
+		fmt.Sprintf("%s.%s", routing.PauseKey, gameState.GetUsername()),
 		routing.PauseKey,
 		pubsub.Transient,
 		handlerPause(gameState),
 	)
 	if err != nil {
-		log.Panicln("Error during server subscription:", err)
+		log.Fatalln("Error during subscription to pause:", err)
+	}
+	log.Printf("Succssesfully subscribed '%s' queue", routing.PauseKey)
+
+	// subscribe to 'army moves' queue
+	err = pubsub.SubscribeJSON(
+		connection,
+		routing.ExchangePerilTopic,
+		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, gameState.GetUsername()),
+		fmt.Sprintf("%s.*", routing.ArmyMovesPrefix),
+		pubsub.Transient,
+		handlerMove(gameState),
+	)
+	if err != nil {
+		log.Fatalln("Error during army moves subscription:", err)
 	}
 
-infiniteLoop:
+	log.Printf("Succssesfully subscribed '%s' queue", routing.ArmyMovesPrefix)
+
 	for {
 		// get user input
 		input := gamelogic.GetInput()
@@ -108,11 +116,30 @@ infiniteLoop:
 
 			// NOTE(molivera): assigned to _ because, at the moment, is not
 			// useful, as the command already prints the info
-			_, err := gameState.CommandMove(input)
+			move, err := gameState.CommandMove(input)
 			if err != nil {
 				log.Println(err)
 			}
 
+			err = pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilTopic,
+				fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, move.Player.Username),
+				move,
+			)
+			if err != nil {
+				log.Printf("There was an error publishing the move, it will not be applied: %v\n", err)
+				for _, unit := range move.Units {
+					id := strconv.Itoa(unit.ID)
+					location := fmt.Sprint(unit.Location)
+
+					_, err := gameState.CommandMove([]string{"move", location, id})
+					if err != nil {
+						log.Println(err)
+					}
+				}
+			}
+			fmt.Printf("Moved %d units to %s\n", len(move.Units), move.ToLocation)
 
 		case "status":
 			/*
@@ -141,24 +168,10 @@ infiniteLoop:
 				then exit the REPL.
 			*/
 			gamelogic.PrintQuit()
-			break infiniteLoop
+			return
 
 		default:
 			fmt.Println("Wrong input")
 		}
-	}
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-
-	log.Println("")
-	log.Println("Shutting the client down...")
-}
-
-func handlerPause(gamestate *gamelogic.GameState) func(routing.PlayingState) {
-	return func(state routing.PlayingState) {
-		defer fmt.Print("> ")
-		gamestate.HandlePause(state)
 	}
 }
