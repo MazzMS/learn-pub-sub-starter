@@ -30,6 +30,18 @@ func main() {
 		log.Panicln("Error during channel creation:", err)
 	}
 
+	// channel, queue, err := pubsub.DeclareAndBind(
+	_, _, err = pubsub.DeclareAndBind(
+		connection,
+		routing.ExchangePerilTopic,
+		"game_logs",
+		"game_logs.*",
+		pubsub.Durable,
+	)
+	if err != nil {
+		log.Panicln("Error during queue declaration/binding:", err)
+	}
+
 	err = pubsub.PublishJSON(
 		channel,
 		routing.ExchangePerilDirect,
