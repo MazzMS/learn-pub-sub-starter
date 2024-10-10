@@ -47,7 +47,7 @@ func main() {
 
 	infiniteLoop:
 	for {
-		// get user input
+		// get input
 		possibleInputs := gamelogic.GetInput()
 
 		// no input, go next
