@@ -44,7 +44,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	simpleQueueType SimpleQueueType,
-	handler func(T),
+	handler func(T) AckType,
 ) error {
 	channel, _, err := DeclareAndBind(
 		conn,
@@ -56,7 +56,6 @@ func SubscribeJSON[T any](
 	if err != nil {
 		return err
 	}
-	log.Println("Succssesfully declared and binded a queue")
 
 	// get delievery channel
 	deliveries, err := channel.Consume(
@@ -86,16 +85,30 @@ func SubscribeJSON[T any](
 			}
 
 			// do whatever is supposed
-			handler(msg)
+			acktype := handler(msg)
 
-			// remove msg from queue
-			err = delivery.Ack(false)
-			if err != nil {
-				log.Printf("Error acnowledging message: %v\n", err)
+			switch acktype {
+			case Ack:
+				err = delivery.Ack(false)
+				if err != nil {
+					log.Printf("Error acknowledging message: %v\n", err)
+				}
+				log.Println("Acknowledging message")
+			case NackRequeue:
+				err = delivery.Nack(false, true)
+				if err != nil {
+					log.Printf("Error not acknowledging and requeueing message: %v\n", err)
+				}
+				log.Println("Not acknowledging message, requeueing")
+			case NackDiscard:
+				err = delivery.Nack(false, false)
+				if err != nil {
+					log.Printf("Error not acknowledging and discarding message: %v\n", err)
+				}
+				log.Println("Not acknowledging message, discarding")
 			}
 		}
 	}()
-
 
 	return nil
 }

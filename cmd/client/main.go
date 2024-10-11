@@ -39,6 +39,20 @@ func main() {
 	// generate game state
 	gameState := gamelogic.NewGameState(username)
 
+	// subscribe to 'war' queue
+	err = pubsub.SubscribeJSON(
+		connection,
+		routing.ExchangePerilTopic,
+		routing.WarRecognitionsPrefix,
+		routing.WarRecognitionsPrefix+".*",
+		pubsub.Durable,
+		handlerWar(gameState),
+	)
+	if err != nil {
+		log.Fatalln("Error during subscription to pause:", err)
+	}
+	log.Printf("Succssesfully subscribed '%s' queue", routing.WarRecognitionsPrefix)
+
 	// subscribe to 'pause' queue
 	err = pubsub.SubscribeJSON(
 		connection,
@@ -60,7 +74,7 @@ func main() {
 		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, gameState.GetUsername()),
 		fmt.Sprintf("%s.*", routing.ArmyMovesPrefix),
 		pubsub.Transient,
-		handlerMove(gameState),
+		handlerMove(gameState, publishCh),
 	)
 	if err != nil {
 		log.Fatalln("Error during army moves subscription:", err)
