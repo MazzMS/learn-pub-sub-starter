@@ -43,72 +43,30 @@ func SubscribeJSON[T any](
 	exchange,
 	queueName,
 	key string,
-	simpleQueueType SimpleQueueType,
+	queueType SimpleQueueType,
 	handler func(T) AckType,
 ) error {
-	channel, _, err := DeclareAndBind(
+	unmarshaller := func(data []byte) (T, error) {
+		var msg T
+		err := json.Unmarshal(data, &msg)
+		if err != nil {
+			return msg, err
+		}
+		return msg, nil
+	}
+	err := subscribe(
 		conn,
 		exchange,
 		queueName,
 		key,
-		simpleQueueType,
+		queueType,
+		handler,
+		unmarshaller,
 	)
 	if err != nil {
 		return err
 	}
 
-	// get delievery channel
-	deliveries, err := channel.Consume(
-		queueName,
-		"",    // consumer name (auto-generated)
-		false, // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
-	)
-	if err != nil {
-		return err
-	}
-
-	// start routine
-	go func() {
-		for delivery := range deliveries {
-			// go through each msg
-
-			// unmarshal it
-			var msg T
-			err := json.Unmarshal(delivery.Body, &msg)
-			if err != nil {
-				delivery.Nack(false, true) // no acknowledge
-				continue
-			}
-
-			// do whatever is supposed
-			acktype := handler(msg)
-
-			switch acktype {
-			case Ack:
-				err = delivery.Ack(false)
-				if err != nil {
-					log.Printf("Error acknowledging message: %v\n", err)
-				}
-				log.Println("Acknowledging message")
-			case NackRequeue:
-				err = delivery.Nack(false, true)
-				if err != nil {
-					log.Printf("Error not acknowledging and requeueing message: %v\n", err)
-				}
-				log.Println("Not acknowledging message, requeueing")
-			case NackDiscard:
-				err = delivery.Nack(false, false)
-				if err != nil {
-					log.Printf("Error not acknowledging and discarding message: %v\n", err)
-				}
-				log.Println("Not acknowledging message, discarding")
-			}
-		}
-	}()
-
+	log.Println("Successful JSON subscription")
 	return nil
 }

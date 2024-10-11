@@ -52,6 +52,19 @@ func main() {
 		log.Fatalln("Error during channel creation:", err)
 	}
 
+	// Subscribe to logs
+	err = pubsub.SubscribeGob(
+		connection,
+		routing.ExchangePerilTopic,
+		"game_logs",
+		"game_logs.*",
+		pubsub.Durable,
+		handlerLogs(),
+	)
+	if err != nil {
+		log.Fatalln("error during logs subscription (gob):", err)
+	}
+
 	// Print what users can do
 	gamelogic.PrintServerHelp()
 
