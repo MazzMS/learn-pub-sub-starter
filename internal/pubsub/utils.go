@@ -26,6 +26,11 @@ func subscribe[T any](
 		return err
 	}
 
+	err = channel.Qos(10, 0, true)
+	if err != nil {
+		return err
+	}
+
 	// get delievery channel
 	deliveries, err := channel.Consume(
 		queueName,

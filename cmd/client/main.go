@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// generate game state
-	gameState := gamelogic.NewGameState(username)
+	gs := gamelogic.NewGameState(username)
 
 	// subscribe to 'war' queue
 	err = pubsub.SubscribeJSON(
@@ -46,7 +46,7 @@ func main() {
 		routing.WarRecognitionsPrefix,
 		routing.WarRecognitionsPrefix+".*",
 		pubsub.Durable,
-		handlerWar(gameState, publishCh),
+		handlerWar(gs, publishCh),
 	)
 	if err != nil {
 		log.Fatalln("Error during subscription to pause:", err)
@@ -57,10 +57,10 @@ func main() {
 	err = pubsub.SubscribeJSON(
 		connection,
 		routing.ExchangePerilDirect,
-		fmt.Sprintf("%s.%s", routing.PauseKey, gameState.GetUsername()),
+		fmt.Sprintf("%s.%s", routing.PauseKey, gs.GetUsername()),
 		routing.PauseKey,
 		pubsub.Transient,
-		handlerPause(gameState),
+		handlerPause(gs),
 	)
 	if err != nil {
 		log.Fatalln("Error during subscription to pause:", err)
@@ -71,10 +71,10 @@ func main() {
 	err = pubsub.SubscribeJSON(
 		connection,
 		routing.ExchangePerilTopic,
-		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, gameState.GetUsername()),
+		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, gs.GetUsername()),
 		fmt.Sprintf("%s.*", routing.ArmyMovesPrefix),
 		pubsub.Transient,
-		handlerMove(gameState, publishCh),
+		handlerMove(gs, publishCh),
 	)
 	if err != nil {
 		log.Fatalln("Error during army moves subscription:", err)
@@ -111,7 +111,7 @@ func main() {
 				* antarctica
 				* australia
 			*/
-			err := gameState.CommandSpawn(input)
+			err := gs.CommandSpawn(input)
 			if err != nil {
 				log.Println(err)
 			}
@@ -130,7 +130,7 @@ func main() {
 
 			// NOTE(molivera): assigned to _ because, at the moment, is not
 			// useful, as the command already prints the info
-			move, err := gameState.CommandMove(input)
+			move, err := gs.CommandMove(input)
 			if err != nil {
 				log.Println(err)
 			}
@@ -147,7 +147,7 @@ func main() {
 					id := strconv.Itoa(unit.ID)
 					location := fmt.Sprint(unit.Location)
 
-					_, err := gameState.CommandMove([]string{"move", location, id})
+					_, err := gs.CommandMove([]string{"move", location, id})
 					if err != nil {
 						log.Println(err)
 					}
@@ -160,7 +160,7 @@ func main() {
 				Use the gamestate.CommandStatus method to print the current
 				status of the player's game state.
 			*/
-			gameState.CommandStatus()
+			gs.CommandStatus()
 
 		case "help":
 			/*
@@ -170,11 +170,21 @@ func main() {
 			gamelogic.PrintClientHelp()
 
 		case "spam":
-			/*
-				For now, just print a message that says
-				"Spamming not allowed yet!"
-			*/
-			fmt.Println("Spamming not allowed yet!")
+			secondWord := input[1]
+			times, err := strconv.Atoi(secondWord)
+			if err != nil {
+				fmt.Println("bad number")
+			}
+
+			for i := 0; i < times; i++ {
+				malLog := gamelogic.GetMaliciousLog()
+				pubsub.PublishGob(
+					publishCh,
+					routing.ExchangePerilTopic,
+					"game_logs."+gs.GetUsername(),
+					malLog,
+				)
+			}
 
 		case "quit":
 			/*
